@@ -173,7 +173,7 @@ func find(dir, name string) string {
 	return hit
 }
 
-func install(d driver, work string) error {
+func fetch(d driver, work string) (string, error) {
 	u, _ := url.Parse(d.url)
 	zipName, _ := url.PathUnescape(path.Base(u.Path))
 	zipPath := filepath.Join(work, zipName)
@@ -181,16 +181,19 @@ func install(d driver, work string) error {
 
 	fmt.Printf("  downloading %s\n", zipName)
 	if err := download(d.url, zipPath); err != nil {
-		return err
+		return "", err
 	}
 	if err := unzip(zipPath, dir); err != nil {
-		return err
+		return "", err
 	}
 	target := find(dir, d.target)
 	if target == "" {
-		return fmt.Errorf("%s not found in %s", d.target, zipName)
+		return "", fmt.Errorf("%s not found in %s", d.target, zipName)
 	}
+	return target, nil
+}
 
+func install(target string) error {
 	var cmd *exec.Cmd
 	switch strings.ToLower(filepath.Ext(target)) {
 	case ".inf":
@@ -270,10 +273,30 @@ func main() {
 	}
 	defer os.RemoveAll(work)
 
+	// Everything is downloaded before anything is installed: the Wi-Fi and
+	// Bluetooth installers reset the network adapters, which kills any
+	// download that comes after them.
 	var failed []string
+	targets := make([]string, len(drivers))
+	fmt.Println("\ndownloading all drivers first...")
 	for i, d := range drivers {
 		fmt.Printf("\n[%d/%d] %s\n", i+1, len(drivers), d.name)
-		if err := install(d, work); err != nil {
+		t, err := fetch(d, work)
+		if err != nil {
+			fmt.Printf("  FAILED: %v\n", err)
+			failed = append(failed, d.name)
+			continue
+		}
+		targets[i] = t
+	}
+
+	fmt.Println("\ninstalling...")
+	for i, d := range drivers {
+		if targets[i] == "" {
+			continue
+		}
+		fmt.Printf("\n[%d/%d] %s\n", i+1, len(drivers), d.name)
+		if err := install(targets[i]); err != nil {
 			fmt.Printf("  FAILED: %v\n", err)
 			failed = append(failed, d.name)
 			continue
