@@ -1,8 +1,8 @@
 name: release
 
 on:
-  push:
-    tags: ["v*"]
+  release:
+    types: [published]
 
 permissions:
   contents: write
@@ -18,6 +18,4 @@ jobs:
       - run: GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o DeckLCDDrivers.exe .
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" DeckLCDDrivers.exe --title "$GITHUB_REF_NAME" \
-            --notes "Download DeckLCDDrivers.exe and run it on a Steam Deck LCD running Windows. It pulls the current driver list from Valve's support page and installs the APU, Wi-Fi, Bluetooth, SD card reader and audio drivers. The APU download is about 700 MB."
+        run: gh release upload "${{ github.event.release.tag_name }}" DeckLCDDrivers.exe --clobber
